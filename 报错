@@ -1,0 +1,19 @@
+[semtp@develop-m6858ec34f334ae987aa89224a2bffc9 DataOperate]$ python 8_filter_labeled_data.py
+正在分析文件: ../data/单框架语义化整合0322_muban_merged.csv...
+文件总行数: 109,643,953
+筛选进度:   0%|                                                                                                                                          | 0/109643953 [00:02<?, ?行/s]
+Traceback (most recent call last):
+  File "/home/semtp/notebooks/DataOperate/8_filter_labeled_data.py", line 81, in <module>
+    filter_csv_by_non_empty_label(**config)
+  File "/home/semtp/notebooks/DataOperate/8_filter_labeled_data.py", line 43, in filter_csv_by_non_empty_label
+    filtered_batch = batch.filter(
+  File "/usr/local/lib/python3.10/site-packages/polars/dataframe/frame.py", line 5501, in filter
+    self.lazy()
+  File "/usr/local/lib/python3.10/site-packages/polars/_utils/deprecation.py", line 97, in wrapper
+    return function(*args, **kwargs)
+  File "/usr/local/lib/python3.10/site-packages/polars/lazyframe/opt_flags.py", line 326, in wrapper
+    return function(*args, **kwargs)
+  File "/usr/local/lib/python3.10/site-packages/polars/lazyframe/frame.py", line 2464, in collect
+    return wrap_df(ldf.collect(engine, callback))
+polars.exceptions.ColumnNotFoundError: unable to find column "scene_label"; valid columns: ["2026/01/07 07:09", "00009be2-c39b-87b9-e190-a8dd7fe48e98", "", "[current]时间：2026/01/07 07:09周三上午，工作日，城市：西安市，POI：医疗诊所、店铺，Wifi已连接，应用记录：无[/current]"]
+[semtp@develop-m6858ec34f334ae987aa89224a2bffc9 DataOperate]$ 

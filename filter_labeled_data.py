@@ -1,107 +1,83 @@
-# 筛选指定label
-import pandas as pd
-from tqdm import tqdm
+"""筛选标签不为空的数据。"""
+
 import os
 
-def filter_csv_by_labels(input_file, output_file, target_labels, label_column='scene_label'):
+import polars as pl
+from tqdm import tqdm
+
+
+def filter_csv_by_non_empty_label(input_file, output_file, label_column="scene_label"):
     """
+    筛选 label 不为空的数据并保存（分块处理，适合大文件）。
+
     input_file: 原始大文件路径
     output_file: 筛选后的保存路径
-    target_labels: 包含目标标签的列表, 例如 ['apple', 'cherry']
     label_column: label 所在的列名
     """
-    
-    # 1. 快速获取总行数用于进度条显示
+
     print(f"正在分析文件: {input_file}...")
-    with open(input_file, 'rb') as f:
-        total_lines = sum(1 for _ in f) - 1
-    
-    chunk_size = 1000000  # 每次处理 100 万行
-    
-    # 2. 分块读取并过滤
-    reader = pd.read_csv(input_file, chunksize=chunk_size)
-    
-    # 初始化：第一次写入需要表头，之后追加不需要
-    is_first_chunk = True
-    
+
+    # 1. 先快速获取总行数（用于进度条）
+    with open(input_file, "rb") as f:
+        total_lines = max(sum(1 for _ in f) - 1, 0)  # 减去表头，避免负数
+
+    print(f"文件总行数: {total_lines:,}")
+
+    # 2. 分块处理
+    batch_size = 1_000_000  # 每批 100 万行
+    is_first_batch = True
+
     with tqdm(total=total_lines, desc="筛选进度", unit="行") as pbar:
-        for chunk in reader:
-            # 筛选出 label 列在目标列表中的行
-            # isin 会自动处理并忽略 NaN 值
-            filtered_chunk = chunk[chunk[label_column].isin(target_labels)]
-            
-            # 如果这一块中有符合条件的数据，则执行写入
-            if not filtered_chunk.empty:
-                # mode='a' 表示追加模式
-                # header=is_first_chunk 确保只有文件开头有表头
-                filtered_chunk.to_csv(
-                    output_file, 
-                    mode='a', 
-                    index=False, 
-                    header=is_first_chunk, 
-                    encoding='utf-8'
-                )
-                is_first_chunk = False # 第一次写入后，关闭表头开关
-            
-            pbar.update(len(chunk))
+        offset = 0
+        while offset < total_lines:
+            batch = pl.read_csv(
+                input_file,
+                n_rows=batch_size,
+                skip_rows=offset + 1,  # 跳过表头 + 已处理行
+            )
+
+            if batch.is_empty():
+                break
+
+            # label 不为空：非 null 且去空白后不为空串
+            filtered_batch = batch.filter(
+                pl.col(label_column)
+                .cast(pl.Utf8, strict=False)
+                .str.strip_chars()
+                .fill_null("")
+                != ""
+            )
+
+            if not filtered_batch.is_empty():
+                if is_first_batch:
+                    filtered_batch.write_csv(output_file)
+                    is_first_batch = False
+                else:
+                    with open(output_file, "a", encoding="utf-8", newline="") as f:
+                        filtered_batch.write_csv(f, include_header=False)
+
+            pbar.update(len(batch))
+            offset += len(batch)
+
+            if len(batch) < batch_size:
+                break
 
     print(f"\n处理完成！筛选后的数据已保存至: {output_file}")
 
+    if os.path.exists(output_file):
+        with open(output_file, "rb") as f:
+            output_lines = max(sum(1 for _ in f) - 1, 0)
+        print(f"输出文件行数: {output_lines:,}")
+
 
 if __name__ == "__main__":
-    # 配置参数
     config = {
-        "input_file": "../data/单框架语义化整合0322_muban_merged.csv",       # 原始文件名
-        "output_file": "../data/单框架语义化整合0322_muban_merged_filtered.csv",    # 保存的文件名
-        "target_labels": [
-            "行程规划",
-            
-            "抵达始发高铁站",
-            "在高铁站候车",
-            "高铁行程途中",
-            "抵达终点高铁站",
-            "离开终点高铁站",
-            
-            "抵达始发地铁站",
-            "乘坐地铁中",
-            "抵达终点地铁站",
-            
-            "抵达始发机场",
-            "机场内活动",
-            "飞机行程途中",
-            "抵达终点机场",
-            "离开终点机场",
-            
-            
-            "旅游参观",
-            "旅游中途休息",
-            "旅游住宿休息",
-            "酒店办理入住",
-            "旅游中逛街",
-            "旅游中用餐",
-            
-            "等待网约车",
-            "乘坐网约车行程中",
-            "网约车到达终点",
-            
-            "户外运动",
-            "文化场馆参观",
-            "亲子游玩",
-            
-            "上班通勤",
-            "下班通勤",
-            
-            "自驾途中",
-            "驾车抵达终点",
-            "驾驶途中加油、充电",
-            "服务区休息",
-            "去停车场停车/取车",
-            ],  # 目标 label 列表
-        "label_column": "scene_label"                # CSV 中 label 的列名
+        "input_file": "../data/单框架语义化整合0322_muban_merged.csv",
+        "output_file": "../data/单框架语义化整合0322_muban_merged_filtered.csv",
+        "label_column": "scene_label",
     }
-    
-    # 检查文件是否存在
+
     if os.path.exists(config["input_file"]):
-        filter_csv_by_labels(**config)
+        filter_csv_by_non_empty_label(**config)
     else:
         print("错误：未找到输入文件，请确认路径是否正确。")

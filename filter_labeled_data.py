@@ -17,52 +17,53 @@ def filter_csv_by_non_empty_label(input_file, output_file, label_column="scene_l
 
     print(f"正在分析文件: {input_file}...")
 
+    if os.path.exists(output_file):
+        os.remove(output_file)
+
     # 1. 先快速获取总行数（用于进度条）
     with open(input_file, "rb") as f:
         total_lines = max(sum(1 for _ in f) - 1, 0)  # 减去表头，避免负数
 
     print(f"文件总行数: {total_lines:,}")
 
-    # 2. 分块处理
+    # 2. 分块处理：使用 Polars 的 batched reader，避免重复从文件头扫描
     batch_size = 1_000_000  # 每批 100 万行
-    is_first_batch = True
+    reader = pl.read_csv_batched(
+        input_file,
+        has_header=True,
+        batch_size=batch_size,
+    )
 
-    with tqdm(total=total_lines, desc="筛选进度", unit="行") as pbar:
-        offset = 0
-        while offset < total_lines:
-            batch = pl.read_csv(
-                input_file,
-                n_rows=batch_size,
-                has_header=True,
-                skip_rows=0,
-                skip_rows_after_header=offset,
-            )
+    output_handle = None
 
-            if batch.is_empty():
-                break
+    try:
+        with tqdm(total=total_lines, desc="筛选进度", unit="行") as pbar:
+            while True:
+                batches = reader.next_batches(1)
+                if not batches:
+                    break
 
-            # label 不为空：非 null 且去空白后不为空串
-            filtered_batch = batch.filter(
-                pl.col(label_column)
-                .cast(pl.Utf8, strict=False)
-                .str.strip_chars()
-                .fill_null("")
-                != ""
-            )
+                for batch in batches:
+                    # label 不为空：非 null 且去空白后不为空串
+                    filtered_batch = batch.filter(
+                        pl.col(label_column)
+                        .cast(pl.Utf8, strict=False)
+                        .str.strip_chars()
+                        .fill_null("")
+                        != ""
+                    )
 
-            if not filtered_batch.is_empty():
-                if is_first_batch:
-                    filtered_batch.write_csv(output_file)
-                    is_first_batch = False
-                else:
-                    with open(output_file, "a", encoding="utf-8", newline="") as f:
-                        filtered_batch.write_csv(f, include_header=False)
+                    if not filtered_batch.is_empty():
+                        if output_handle is None:
+                            output_handle = open(output_file, "w", encoding="utf-8", newline="")
+                            filtered_batch.write_csv(output_handle)
+                        else:
+                            filtered_batch.write_csv(output_handle, include_header=False)
 
-            pbar.update(len(batch))
-            offset += len(batch)
-
-            if len(batch) < batch_size:
-                break
+                    pbar.update(len(batch))
+    finally:
+        if output_handle is not None:
+            output_handle.close()
 
     print(f"\n处理完成！筛选后的数据已保存至: {output_file}")
 

@@ -33,7 +33,9 @@ def filter_csv_by_non_empty_label(input_file, output_file, label_column="scene_l
             batch = pl.read_csv(
                 input_file,
                 n_rows=batch_size,
-                skip_rows=offset + 1,  # 跳过表头 + 已处理行
+                has_header=True,
+                skip_rows=0,
+                skip_rows_after_header=offset,
             )
 
             if batch.is_empty():

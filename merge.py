@@ -18,10 +18,10 @@ def process_and_merge_final_streaming_polars(
     1. 已按 udid, time 排好序
     2. 同一个 udid 的记录连续出现
 
-    MERGED_TEXT 规则：
-    [current]当前text[/current]
-    + 依次追加 [previous-1]...[/previous-1] 到 [previous-n]...[/previous-n]
-    （仅限同 udid 的历史记录）
+MERGED_TEXT 规则：
+[current]当前text[order]当前order[/order][/current]
++ 依次追加 [previous-1]...[/previous-1] 到 [previous-n]...[/previous-n]
+（仅限同 udid 的历史记录）
 
     参数:
         input_file: 输入文件路径
@@ -69,6 +69,7 @@ def process_and_merge_final_streaming_polars(
                 "udid",
                 "scene_label",
                 "text",
+                "order",
                 "context",
                 "history_usage",
                 "service_click",
@@ -78,6 +79,7 @@ def process_and_merge_final_streaming_polars(
                 "udid": pl.Utf8,
                 "scene_label": pl.Utf8,
                 "text": pl.Utf8,
+                "order": pl.Utf8,
                 "context": pl.Utf8,
                 "history_usage": pl.Utf8,
                 "service_click": pl.Utf8,
@@ -101,6 +103,7 @@ def process_and_merge_final_streaming_polars(
                 pl.col("udid").fill_null(""),
                 pl.col("scene_label").fill_null(""),
                 pl.col("text").fill_null(""),
+                pl.col("order").fill_null(""),
                 pl.col("context").fill_null(""),
                 pl.col("history_usage").fill_null(""),
                 pl.col("service_click").fill_null(""),
@@ -116,6 +119,7 @@ def process_and_merge_final_streaming_polars(
                 udid = row["udid"]
                 scene_label = row["scene_label"]
                 text = row["text"]
+                order = row["order"]
                 context = row["context"]
                 history_usage = row["history_usage"]
                 service_click = row["service_click"]
@@ -126,7 +130,12 @@ def process_and_merge_final_streaming_polars(
                     last_udid = udid
 
                 cur_text = text or ""
-                merged = f"[current]{cur_text}[/current]"
+                cur_order = order or ""
+
+                merged = f"[current]{cur_text}"
+                if cur_order != "":
+                    merged += f"[order]{cur_order}[/order]"
+                merged += "[/current]"
 
                 if prev_texts:
                     for i, ptxt in enumerate(reversed(prev_texts), start=1):

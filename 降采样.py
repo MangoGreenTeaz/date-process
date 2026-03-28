@@ -1,5 +1,6 @@
 # 降采样
 import os
+import random
 
 import polars as pl
 
@@ -12,9 +13,10 @@ def downsample_csv_by_label(input_file, output_file, n, label_column='label'):
     label_column: label 所在的列名
     """
     batch_size = 200_000
-    label_counts = {}
+    label_seen_counts = {}
+    reservoirs = {}
     processed_rows = 0
-    is_first_write = True
+    output_columns = None
 
     print(f"正在分析文件: {input_file}...")
 
@@ -28,36 +30,41 @@ def downsample_csv_by_label(input_file, output_file, n, label_column='label'):
     )
 
     for batch in batches:
+        if output_columns is None:
+            output_columns = batch.columns
+
         if label_column not in batch.columns:
             raise ValueError(f"CSV 中未找到标签列: {label_column}")
 
-        labels = batch.get_column(label_column).to_list()
-        keep_mask = []
-
-        for label in labels:
+        for row in batch.iter_rows(named=True):
+            label = row.get(label_column)
             if label is None:
-                keep_mask.append(False)
                 continue
 
-            current_count = label_counts.get(label, 0)
-            if current_count < n:
-                label_counts[label] = current_count + 1
-                keep_mask.append(True)
-            else:
-                keep_mask.append(False)
+            seen_count = label_seen_counts.get(label, 0)
+            bucket = reservoirs.setdefault(label, [])
 
-        filtered_batch = batch.filter(pl.Series("_keep", keep_mask))
-
-        if filtered_batch.height > 0:
-            if is_first_write:
-                filtered_batch.write_csv(output_file, include_bom=True)
-                is_first_write = False
+            if len(bucket) < n:
+                bucket.append(row)
             else:
-                with open(output_file, "a", encoding="utf-8", newline="") as f:
-                    f.write(filtered_batch.write_csv(file=None, include_header=False))
+                replace_idx = random.randint(0, seen_count)
+                if replace_idx < n:
+                    bucket[replace_idx] = row
+
+            label_seen_counts[label] = seen_count + 1
 
         processed_rows += batch.height
         print(f"已处理行数: {processed_rows}", end="\r", flush=True)
+
+    sampled_rows = [row for bucket in reservoirs.values() for row in bucket]
+
+    if output_columns is None:
+        output_columns = []
+
+    if sampled_rows:
+        pl.DataFrame(sampled_rows, schema=output_columns).write_csv(output_file, include_bom=True)
+    else:
+        pl.DataFrame({col: [] for col in output_columns}).write_csv(output_file, include_bom=True)
 
     print(f"\n处理完成！每类最多保留 {n} 条数据。")
     print(f"结果已保存至: {output_file}")

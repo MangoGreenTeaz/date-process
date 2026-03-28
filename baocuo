@@ -1,0 +1,43 @@
+[semtp@develop-i5166e3ffbce4cce85913ebca332fdf1 DataOperate]$ ./new.sh 
+Running order_test.py...
+/home/semtp/notebooks/DataOperate/order_test.py:383: DeprecationWarning: `read_csv_batched` is deprecated; use `scan_csv().collect_batches()` instead.
+  reader = pl.read_csv_batched(
+Generating orders: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████| 1/1 [00:00<00:00,  5.46chunk/s]
+order_test.py completed successfully.
+Running merge_test.py...
+开始使用 Polars 分块读取并拼接（不排序，流式写出）...
+/home/semtp/notebooks/DataOperate/merge_test.py:63: DeprecationWarning: `read_csv_batched` is deprecated; use `scan_csv().collect_batches()` instead.
+  reader = pl.read_csv_batched(
+Traceback (most recent call last):
+  File "/home/semtp/notebooks/DataOperate/merge_test.py", line 174, in <module>
+    process_and_merge_final_streaming_polars(**config)
+  File "/home/semtp/notebooks/DataOperate/merge_test.py", line 63, in process_and_merge_final_streaming_polars
+    reader = pl.read_csv_batched(
+  File "/usr/local/lib/python3.10/site-packages/typing_extensions.py", line 2499, in wrapper
+    return arg(*args, **kwargs)
+  File "/usr/local/lib/python3.10/site-packages/polars/_utils/deprecation.py", line 128, in wrapper
+    return function(*args, **kwargs)
+  File "/usr/local/lib/python3.10/site-packages/polars/_utils/deprecation.py", line 128, in wrapper
+    return function(*args, **kwargs)
+  File "/usr/local/lib/python3.10/site-packages/polars/_utils/deprecation.py", line 128, in wrapper
+    return function(*args, **kwargs)
+  File "/usr/local/lib/python3.10/site-packages/polars/io/csv/functions.py", line 1051, in read_csv_batched
+    return BatchedCsvReader(
+  File "/usr/local/lib/python3.10/site-packages/polars/io/csv/batched_reader.py", line 84, in __init__
+    q.collect_schema()
+  File "/usr/local/lib/python3.10/site-packages/polars/lazyframe/frame.py", line 2622, in collect_schema
+    return Schema(self._ldf.collect_schema(), check_dtypes=False)
+polars.exceptions.ColumnNotFoundError: unable to find column "context"; valid columns: ["time", "udid", "text", "scene_label", "order"]
+
+Resolved plan until failure:
+
+        ---> FAILED HERE RESOLVING 'select' <---
+Csv SCAN [../data/first_10000_rows_order.csv]
+PROJECT */5 COLUMNS
+ESTIMATED ROWS: 11836
+
+This error occurred with the following context stack:
+        [1] 'select'
+
+Error: merge_test.py failed to run.
+[semtp@develop-i5166e3ffbce4cce85913ebca332fdf1 DataOperate]$ 
